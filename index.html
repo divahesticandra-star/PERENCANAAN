@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Formulir ABK - Analisis Beban Kerja</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root{--bg:#f5f7fa;--card:#fff;--ink:#1c2733;--mut:#5d6b7a;--line:#d8dee6;--pri:#17608f;--pri2:#e6f0f7;--ok:#1f7a4d}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.5 "Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:var(--pri);color:#fff;padding:18px 20px}
+header h1{margin:0;font-size:20px}header p{margin:2px 0 0;opacity:.85;font-size:14px}
+main{max-width:960px;margin:0 auto;padding:16px}
+.tabs{display:flex;gap:8px;margin-bottom:14px}
+.tabs button{flex:1;padding:10px;border:1px solid var(--line);background:var(--card);border-radius:8px;font:inherit;cursor:pointer}
+.tabs button.on{background:var(--pri);color:#fff;border-color:var(--pri)}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:14px}
+h2{margin:0 0 12px;font-size:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+label{display:block;font-size:13px;color:var(--mut);margin-bottom:3px}
+input{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font:inherit}
+input:focus,button:focus-visible{outline:2px solid var(--pri);outline-offset:1px}
+.wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:720px}
+th,td{padding:6px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font-size:13px;color:var(--mut);font-weight:600}
+td.num{text-align:right;white-space:nowrap;padding-right:10px}
+.btn{padding:9px 16px;border:0;border-radius:6px;background:var(--pri);color:#fff;font:inherit;cursor:pointer}
+.btn.sec{background:var(--pri2);color:var(--pri)}
+.btn.ok{background:var(--ok)}
+.del{background:none;border:0;color:#b3261e;cursor:pointer;font-size:18px}
+.hasil{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.hasil div{background:var(--pri2);border-radius:8px;padding:12px}
+.hasil b{display:block;font-size:22px;color:var(--pri)}
+.hasil span{font-size:13px;color:var(--mut)}
+.msg{margin-top:10px;font-size:14px;color:var(--mut)}
+.err{color:#b3261e}
+.hide{display:none}
+</style>
+</head>
+<body>
+<header><h1>Analisis Beban Kerja (ABK)</h1><p>Hitung kebutuhan pegawai berdasarkan uraian tugas, volume kerja, dan norma waktu</p></header>
+<main>
+<div class="tabs">
+  <button id="tabP" class="on" onclick="tab('P')">Isi formulir (pegawai)</button>
+  <button id="tabA" onclick="tab('A')">Rekap (admin)</button>
+</div>
+
+<div id="viewP">
+  <section>
+    <h2>Identitas</h2>
+    <div class="grid">
+      <div><label for="nama">Nama lengkap</label><input id="nama"></div>
+      <div><label for="nip">NIP / ID pegawai</label><input id="nip"></div>
+      <div><label for="unit">Unit kerja</label><input id="unit"></div>
+      <div><label for="jabatan">Jabatan</label><input id="jabatan"></div>
+      <div><label for="wkt">Waktu kerja efektif (menit/tahun)</label><input id="wkt" type="number" value="75000" min="1"></div>
+    </div>
+    <p class="msg">Standar umum: 1.250 jam per tahun = 75.000 menit. Ubah jika instansi Anda memakai angka lain.</p>
+  </section>
+
+  <section>
+    <h2>Uraian tugas</h2>
+    <div class="wrap">
+      <table>
+        <thead><tr><th>Uraian tugas</th><th>Satuan hasil</th><th>Volume kerja / tahun</th><th>Norma waktu (menit / satuan)</th><th>Beban (menit)</th><th></th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <p><button class="btn sec" onclick="addRow()">+ Tambah tugas</button></p>
+  </section>
+
+  <section>
+    <h2>Hasil perhitungan</h2>
+    <div class="hasil">
+      <div><b id="rTot">0</b><span>Total beban kerja (menit/tahun)</span></div>
+      <div><b id="rJam">0</b><span>Total beban kerja (jam/tahun)</span></div>
+      <div><b id="rKeb">0</b><span>Kebutuhan pegawai (orang)</span></div>
+    </div>
+    <p style="margin-top:14px"><button class="btn ok" onclick="unduhPegawai()">Simpan sebagai Excel</button></p>
+    <p class="msg">Setelah file .xlsx terunduh, kirim file tersebut ke admin (email, WhatsApp, atau folder bersama).</p>
+    <p id="msgP" class="msg err"></p>
+  </section>
+</div>
+
+<div id="viewA" class="hide">
+  <section>
+    <h2>Gabungkan file dari pegawai</h2>
+    <p class="msg" style="margin-top:0">Pilih semua file .xlsx yang dikirim pegawai sekaligus (tahan Ctrl atau Shift). Sistem menggabungkannya, lalu mengunduh satu ZIP berisi rekap keseluruhan dan satu file Excel per jabatan.</p>
+    <input id="files" type="file" accept=".xlsx" multiple>
+    <p><button class="btn" onclick="gabung()">Gabungkan dan unduh ZIP per jabatan</button></p>
+    <p id="msgA" class="msg"></p>
+  </section>
+</div>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt = n => (Math.round(n*100)/100).toLocaleString('id-ID');
+
+function tab(t){
+  $('viewP').classList.toggle('hide', t!=='P');
+  $('viewA').classList.toggle('hide', t!=='A');
+  $('tabP').classList.toggle('on', t==='P');
+  $('tabA').classList.toggle('on', t==='A');
+}
+
+function addRow(){
+  const tr = document.createElement('tr');
+  tr.innerHTML =
+    '<td><input class="u" aria-label="Uraian tugas"></td>'+
+    '<td><input class="s" aria-label="Satuan hasil"></td>'+
+    '<td><input class="v" type="number" min="0" step="any" aria-label="Volume kerja"></td>'+
+    '<td><input class="n" type="number" min="0" step="any" aria-label="Norma waktu"></td>'+
+    '<td class="num b">0</td>'+
+    '<td><button class="del" title="Hapus baris" aria-label="Hapus baris">&times;</button></td>';
+  tr.oninput = hitung;
+  tr.querySelector('.del').onclick = () => { tr.remove(); hitung(); };
+  $('rows').appendChild(tr);
+}
+
+function ambilTugas(){
+  return [...$('rows').children].map(tr => {
+    const v = parseFloat(tr.querySelector('.v').value)||0;
+    const n = parseFloat(tr.querySelector('.n').value)||0;
+    return {uraian:tr.querySelector('.u').value.trim(), satuan:tr.querySelector('.s').value.trim(), volume:v, norma:n, beban:v*n};
+  });
+}
+
+function hitung(){
+  let tot = 0;
+  [...$('rows').children].forEach(tr => {
+    const b = (parseFloat(tr.querySelector('.v').value)||0)*(parseFloat(tr.querySelector('.n').value)||0);
+    tr.querySelector('.b').textContent = fmt(b);
+    tot += b;
+  });
+  const w = parseFloat($('wkt').value)||0;
+  $('rTot').textContent = fmt(tot);
+  $('rJam').textContent = fmt(tot/60);
+  $('rKeb').textContent = w>0 ? fmt(tot/w) : '0';
+}
+$('wkt').oninput = hitung;
+
+function unduhPegawai(){
+  const msg = $('msgP'); msg.textContent = '';
+  const nama = $('nama').value.trim(), jab = $('jabatan').value.trim();
+  const tugas = ambilTugas().filter(t => t.uraian || t.beban);
+  const w = parseFloat($('wkt').value)||0;
+  if(!nama || !jab){ msg.textContent = 'Isi nama dan jabatan terlebih dahulu.'; return; }
+  if(!tugas.length){ msg.textContent = 'Tambahkan minimal satu tugas.'; return; }
+  if(w<=0){ msg.textContent = 'Waktu kerja efektif harus lebih dari 0.'; return; }
+  const tot = tugas.reduce((a,t)=>a+t.beban,0);
+  const id = $('nip').value.trim();
+  const ring = [{Nama:nama, NIP:id, 'Unit Kerja':$('unit').value.trim(), Jabatan:jab,
+    'Waktu Efektif (menit/tahun)':w, 'Total Beban (menit)':tot, 'Total Beban (jam)':tot/60, 'Kebutuhan Pegawai':tot/w}];
+  const rin = tugas.map((t,i)=>({Nama:nama, NIP:id, Jabatan:jab, No:i+1,
+    'Uraian Tugas':t.uraian, 'Satuan Hasil':t.satuan, 'Volume Kerja':t.volume, 'Norma Waktu (menit)':t.norma, 'Beban (menit)':t.beban}));
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ring), 'Ringkasan');
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rin), 'Rincian');
+  XLSX.writeFile(wb, 'ABK_'+nama.replace(/[^\w]+/g,'_')+'.xlsx');
+  msg.className = 'msg'; msg.textContent = 'File Excel sudah diunduh. Kirim ke admin.';
+}
+
+function bacaFile(f){
+  return new Promise((ok, gagal) => {
+    const r = new FileReader();
+    r.onload = e => {
+      try{
+        const wb = XLSX.read(e.target.result, {type:'array'});
+        if(!wb.Sheets['Ringkasan'] || !wb.Sheets['Rincian']) return gagal(new Error(f.name+': bukan file dari formulir ini'));
+        ok({ring:XLSX.utils.sheet_to_json(wb.Sheets['Ringkasan']), rin:XLSX.utils.sheet_to_json(wb.Sheets['Rincian'])});
+      }catch(err){ gagal(new Error(f.name+': file tidak bisa dibaca')); }
+    };
+    r.onerror = () => gagal(new Error(f.name+': gagal dibuka'));
+    r.readAsArrayBuffer(f);
+  });
+}
+
+async function gabung(){
+  const msg = $('msgA'); msg.className = 'msg';
+  const fs = [...$('files').files];
+  if(!fs.length){ msg.className='msg err'; msg.textContent = 'Pilih minimal satu file .xlsx.'; return; }
+  try{
+    const hasil = await Promise.all(fs.map(bacaFile));
+    const ring = hasil.flatMap(h=>h.ring), rin = hasil.flatMap(h=>h.rin);
+    const per = {};
+    ring.forEach(r => {
+      const j = (r.Jabatan || '(tanpa jabatan)').toString().trim().toLowerCase();
+      per[j] = per[j] || {Jabatan:(r.Jabatan || '(tanpa jabatan)').toString().trim(), 'Jumlah Pengisi':0, 'Total Beban (menit)':0, 'Kebutuhan Pegawai':0};
+      per[j]['Jumlah Pengisi']++;
+      per[j]['Total Beban (menit)'] += r['Total Beban (menit)']||0;
+      per[j]['Kebutuhan Pegawai'] += r['Kebutuhan Pegawai']||0;
+    });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ring), 'Ringkasan');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rin), 'Rincian');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(Object.values(per)), 'Per Jabatan');
+    const zip = new JSZip();
+    zip.file('Rekap_ABK.xlsx', XLSX.write(wb,{bookType:'xlsx',type:'array'}));
+    const kunci = x => (x.Jabatan||'(tanpa jabatan)').toString().trim().toLowerCase();
+    const nama = {};
+    ring.forEach(r => { nama[kunci(r)] = nama[kunci(r)] || (r.Jabatan||'(tanpa jabatan)').toString().trim(); });
+    Object.keys(nama).forEach(k => {
+      const w2 = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(w2, XLSX.utils.json_to_sheet(ring.filter(x=>kunci(x)===k)), 'Ringkasan');
+      XLSX.utils.book_append_sheet(w2, XLSX.utils.json_to_sheet(rin.filter(x=>kunci(x)===k)), 'Rincian');
+      zip.file('Per Jabatan/'+nama[k].replace(/[\\/:*?"<>|]+/g,'_')+'.xlsx', XLSX.write(w2,{bookType:'xlsx',type:'array'}));
+    });
+    const blob = await zip.generateAsync({type:'blob'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'Rekap_ABK.zip'; a.click();
+    msg.textContent = ring.length+' pegawai digabung menjadi '+Object.keys(nama).length+' file jabatan. Rekap_ABK.zip sudah diunduh.';
+  }catch(e){ msg.className='msg err'; msg.textContent = e.message; }
+}
+
+addRow(); addRow(); addRow();
+</script>
+</body>
+</html>
