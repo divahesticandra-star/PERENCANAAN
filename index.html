@@ -23,7 +23,7 @@ label{display:block;font-size:13px;color:var(--mut);margin-bottom:3px}
 input{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:6px;font:inherit}
 input:focus,button:focus-visible{outline:2px solid var(--pri);outline-offset:1px}
 .wrap{overflow-x:auto}
-table{width:100%;border-collapse:collapse;min-width:720px}
+table{width:100%;border-collapse:collapse;min-width:860px}
 th,td{padding:6px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle}
 th{font-size:13px;color:var(--mut);font-weight:600}
 td.num{text-align:right;white-space:nowrap;padding-right:10px}
@@ -65,7 +65,7 @@ td.num{text-align:right;white-space:nowrap;padding-right:10px}
     <h2>Uraian tugas</h2>
     <div class="wrap">
       <table>
-        <thead><tr><th>Uraian tugas</th><th>Satuan hasil</th><th>Volume kerja / tahun</th><th>Norma waktu (menit / satuan)</th><th>Beban (menit)</th><th></th></tr></thead>
+        <thead><tr><th>Uraian tugas</th><th>Satuan hasil</th><th>Volume kerja / tahun</th><th>Norma waktu (menit / satuan)</th><th>Standar kemampuan kerja (satuan / tahun)</th><th>Beban (menit)</th><th></th></tr></thead>
         <tbody id="rows"></tbody>
       </table>
     </div>
@@ -114,6 +114,7 @@ function addRow(){
     '<td><input class="s" aria-label="Satuan hasil"></td>'+
     '<td><input class="v" type="number" min="0" step="any" aria-label="Volume kerja"></td>'+
     '<td><input class="n" type="number" min="0" step="any" aria-label="Norma waktu"></td>'+
+    '<td class="num k">0</td>'+
     '<td class="num b">0</td>'+
     '<td><button class="del" title="Hapus baris" aria-label="Hapus baris">&times;</button></td>';
   tr.oninput = hitung;
@@ -122,21 +123,24 @@ function addRow(){
 }
 
 function ambilTugas(){
+  const w = parseFloat($('wkt').value)||0;
   return [...$('rows').children].map(tr => {
     const v = parseFloat(tr.querySelector('.v').value)||0;
     const n = parseFloat(tr.querySelector('.n').value)||0;
-    return {uraian:tr.querySelector('.u').value.trim(), satuan:tr.querySelector('.s').value.trim(), volume:v, norma:n, beban:v*n};
+    return {uraian:tr.querySelector('.u').value.trim(), satuan:tr.querySelector('.s').value.trim(), volume:v, norma:n, skr:(w>0&&n>0)?w/n:0, beban:v*n};
   });
 }
 
 function hitung(){
   let tot = 0;
+  const w = parseFloat($('wkt').value)||0;
   [...$('rows').children].forEach(tr => {
-    const b = (parseFloat(tr.querySelector('.v').value)||0)*(parseFloat(tr.querySelector('.n').value)||0);
+    const n = parseFloat(tr.querySelector('.n').value)||0;
+    const b = (parseFloat(tr.querySelector('.v').value)||0)*n;
     tr.querySelector('.b').textContent = fmt(b);
+    tr.querySelector('.k').textContent = (w>0&&n>0) ? fmt(w/n) : '0';
     tot += b;
   });
-  const w = parseFloat($('wkt').value)||0;
   $('rTot').textContent = fmt(tot);
   $('rJam').textContent = fmt(tot/60);
   $('rKeb').textContent = w>0 ? fmt(tot/w) : '0';
@@ -156,7 +160,7 @@ function unduhPegawai(){
   const ring = [{Nama:nama, NIP:id, 'Unit Kerja':$('unit').value.trim(), Jabatan:jab,
     'Waktu Efektif (menit/tahun)':w, 'Total Beban (menit)':tot, 'Total Beban (jam)':tot/60, 'Kebutuhan Pegawai':tot/w}];
   const rin = tugas.map((t,i)=>({Nama:nama, NIP:id, Jabatan:jab, No:i+1,
-    'Uraian Tugas':t.uraian, 'Satuan Hasil':t.satuan, 'Volume Kerja':t.volume, 'Norma Waktu (menit)':t.norma, 'Beban (menit)':t.beban}));
+    'Uraian Tugas':t.uraian, 'Satuan Hasil':t.satuan, 'Volume Kerja':t.volume, 'Norma Waktu (menit)':t.norma, 'Standar Kemampuan Kerja (satuan/tahun)':t.skr, 'Beban (menit)':t.beban}));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(ring), 'Ringkasan');
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rin), 'Rincian');
